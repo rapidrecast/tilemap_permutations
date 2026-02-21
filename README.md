@@ -4,7 +4,7 @@ A CLI tool designed to generate a comprehensive JSON mapping of all possible bio
 
 ## Features
 
-- **Nested Permutations**: Generates a self-documenting JSON structure following the path: `[here] -> north -> [north_biome] -> east -> [east_biome] -> south -> [south_biome] -> west -> [west_biome]`.
+- **Nested Permutations**: Generates a self-documenting JSON structure following the path: `[biome of interest] -> north -> [north_biome] -> east -> [east_biome] -> south -> [south_biome] -> west -> [west_biome]`.
 - **Custom Biomes**: Provide any number of biome names to generate permutations for.
 - **Presets**: Quick flags for common biome sets (Black/White and Black/White/Grey).
 - **Coordinate Indexing**: Automatically assigns `row` and `col` indices for each unique combination, assuming a square grid layout for each source biome's tileset.
