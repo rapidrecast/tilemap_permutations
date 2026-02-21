@@ -5,6 +5,7 @@ A CLI tool designed to generate a comprehensive JSON mapping of all possible bio
 ## Features
 
 - **Nested Permutations**: Generates a self-documenting JSON structure following the path: `[here] -> north -> [north_biome] -> east -> [east_biome] -> south -> [south_biome] -> west -> [west_biome]`.
+- **Grid Output Mode**: Generates a separate file per biome with a structured row-by-row layout, including coordinate metadata and a summary of biomes and dimensions.
 - **Custom Biomes**: Provide any number of biome names to generate permutations for.
 - **Presets**: Quick flags for common biome sets (Black/White and Black/White/Grey).
 - **Coordinate Indexing**: Automatically assigns `row` and `col` indices for each unique combination, assuming a square grid layout for each source biome's tileset.
@@ -33,62 +34,61 @@ rustc --version
 
 Clone the repository and run using `cargo`:
 
-### Default (Black and White)
-By default, the tool generates permutations for "Black" and "White" biomes.
+### Standard Nested Mode (Default)
+Generates a single `output_biomes.json` file.
 ```bash
 cargo run
 ```
 
-### Black, White, and Grey
-Use the `--grey` (or `-g`) flag to include a "Grey" biome.
+### Grid Mode
+Generates one file per biome (e.g., `black_off_grid.json`) with a structured 2D layout.
 ```bash
-cargo run -- --grey
+cargo run -- --grid # or -r
+```
+
+### Black, White, and Grey Preset
+```bash
+cargo run -- --grey # or -g
 ```
 
 ### Custom Biomes
-You can provide any number of biomes using the `--biomes` (or `-b`) flag.
 ```bash
 cargo run -- --biomes Forest Desert Tundra Water
 ```
 
-### Custom Output File
-Specify a different output filename with `--output` (or `-o`).
+### Custom Output File (Nested Mode)
 ```bash
 cargo run -- --biomes Ash Lava -o volcanic_map.json
 ```
 
 ## Using the Output
 
-The tool generates a JSON file (default: `output_biomes.json`). The structure is deeply nested to allow for easy traversal in game engines or tiling scripts:
+### Nested Mode (Default)
+The structure is deeply nested for easy traversal by neighbor state:
+`root.biome.north.biome.east.biome.south.biome.west.biome.property`
+
+### Grid Mode (`--grid`)
+Generates files like `black_off_grid.json`. This mode provides a row-based layout with metadata:
 
 ```json
 {
-  "black_off": {
-    "north": {
-      "white_on": {
-        "east": {
-          "none": {
-            "south": {
-              "white_on": {
-                "west": {
-                  "none": {
-                    "row": 0,
-                    "col": 2,
-                    "file": "black_off"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+  "biome": "black_off",
+  "total_tiles": 16,
+  "other_biomes": ["black_off", "white_on"],
+  "grid_shape": { "width": 4, "height": 4 },
+  "rows": [
+    {
+      "row": 0,
+      "tiles": [
+        { "col": 0, "north": "none", "east": "none", "south": "none", "west": "none" },
+        { "col": 1, "north": "none", "east": "none", "south": "none", "west": "white_on" }
+      ]
     }
-  }
+  ]
 }
 ```
 
-- **`row` / `col`**: The calculated position of the tile in a sprite sheet.
-- **`file`**: The source biome identifier.
-- **`none`**: Indicates that the neighbor in that direction is the same as the "here" biome (no transition).
-
-This allows your game logic to determine the correct tile index by simply traversing the JSON object based on the surrounding biomes.
+- **`row` / `col`**: The logical coordinates within the tileset.
+- **`grid_shape`**: The width and height of the tileset grid.
+- **`none`**: Indicates that the neighbor in that direction is the same as the current biome.
+- **biome_name**: Indicates a transition to that specific biome.

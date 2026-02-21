@@ -14,9 +14,13 @@ struct Args {
     #[arg(short, long)]
     grey: bool,
 
-    /// Output file name.
+    /// Output file name for the standard nested mode.
     #[arg(short, long, default_value = "output_biomes.json")]
     output: String,
+
+    /// Output per-biome grid files instead of a single nested JSON.
+    #[arg(short = 'r', long)]
+    grid: bool,
 }
 
 #[derive(Debug, Clone, PartialOrd, Ord, Eq, PartialEq, Hash)]
@@ -83,19 +87,67 @@ fn main() {
         }
     }
 
-    let mut json_root = serde_json::Value::Object(serde_json::Map::new());
-    for (_source, set) in combos_per_biome {
+    if args.grid {
         let row_col_dim = biomes.len().pow(2);
-        for (i, entry) in set.iter().enumerate() {
-            let x = i % row_col_dim;
-            let y = i / row_col_dim;
-            update_json(&mut json_root, x, y, entry);
-        }
-    }
+        let other_biomes: Vec<String> = biomes.iter().map(|b| b.as_str().to_string()).collect();
 
-    let fw = File::create(&args.output).unwrap();
-    serde_json::to_writer_pretty(fw, &json_root).unwrap();
-    println!("Successfully wrote to {}", args.output);
+        for (source, set) in combos_per_biome {
+            let mut rows = Vec::new();
+            let mut current_row_cells = Vec::new();
+            let mut row_idx = 0;
+
+            for (i, entry) in set.iter().enumerate() {
+                let col_idx = i % row_col_dim;
+                let cell = serde_json::json!({
+                    "col": col_idx,
+                    "north": entry.north.as_ref().map(|b| b.as_str()).unwrap_or("none"),
+                    "east": entry.east.as_ref().map(|b| b.as_str()).unwrap_or("none"),
+                    "south": entry.south.as_ref().map(|b| b.as_str()).unwrap_or("none"),
+                    "west": entry.west.as_ref().map(|b| b.as_str()).unwrap_or("none"),
+                });
+                current_row_cells.push(cell);
+
+                if (i + 1) % row_col_dim == 0 {
+                    rows.push(serde_json::json!({
+                        "row": row_idx,
+                        "tiles": current_row_cells
+                    }));
+                    current_row_cells = Vec::new();
+                    row_idx += 1;
+                }
+            }
+
+            let output_data = serde_json::json!({
+                "biome": source.as_str(),
+                "total_tiles": set.len(),
+                "other_biomes": other_biomes,
+                "grid_shape": {
+                    "width": row_col_dim,
+                    "height": row_col_dim
+                },
+                "rows": rows
+            });
+
+            let filename = format!("{}_grid.json", source.as_str());
+            let fw = File::create(&filename).unwrap();
+            serde_json::to_writer_pretty(fw, &output_data).unwrap();
+            println!("Successfully wrote grid to {}", filename);
+        }
+    } else {
+        let mut json_root = serde_json::Value::Object(serde_json::Map::new());
+        let row_col_dim = biomes.len().pow(2);
+        for (_source, set) in combos_per_biome {
+            for (i, entry) in set.iter().enumerate() {
+                let x = i % row_col_dim;
+                let y = i / row_col_dim;
+                update_json(&mut json_root, x, y, entry);
+            }
+        }
+
+        let fw = File::create(&args.output).unwrap();
+        serde_json::to_writer_pretty(fw, &json_root).unwrap();
+        println!("Successfully wrote nested JSON to {}", args.output);
+    }
 }
 
 fn update_json(json_root: &mut Value, x: usize, y: usize, entry: &BiomeEntry) {
@@ -106,7 +158,6 @@ fn update_json(json_root: &mut Value, x: usize, y: usize, entry: &BiomeEntry) {
         .or_insert(Value::Object(Map::new()))
         .as_object_mut()
         .unwrap()
-        // Insert "north" object so it's self-documenting json
         .entry("north")
         .or_insert(Value::Object(Map::new()))
         .as_object_mut()
@@ -115,7 +166,6 @@ fn update_json(json_root: &mut Value, x: usize, y: usize, entry: &BiomeEntry) {
         .or_insert(Value::Object(Map::new()))
         .as_object_mut()
         .unwrap()
-        // Insert "east object so it's self-documenting json
         .entry("east")
         .or_insert(Value::Object(Map::new()))
         .as_object_mut()
@@ -124,7 +174,6 @@ fn update_json(json_root: &mut Value, x: usize, y: usize, entry: &BiomeEntry) {
         .or_insert(Value::Object(Map::new()))
         .as_object_mut()
         .unwrap()
-        // South
         .entry("south")
         .or_insert(Value::Object(Map::new()))
         .as_object_mut()
@@ -133,14 +182,11 @@ fn update_json(json_root: &mut Value, x: usize, y: usize, entry: &BiomeEntry) {
         .or_insert(Value::Object(Map::new()))
         .as_object_mut()
         .unwrap()
-        // West
         .entry("west")
         .or_insert(Value::Object(Map::new()))
         .as_object_mut()
         .unwrap()
         .entry(entry.west.as_ref().map(|b| b.as_str()).unwrap_or("none"))
-        // At this point we know it's a unique combination.
-        // We need to insert the index
         .or_insert(serde_json::json!({
             "row": y,
             "col": x,
