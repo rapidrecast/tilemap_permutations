@@ -80,3 +80,68 @@ The tool generates a PNG for each biome. Each tile in the grid represents a uniq
 
 ### JSON Formats
 The tool provides both a nested traversal format and a physical grid-based format (via `--grid`) to help your game logic or level editor identify the correct tile indices.
+
+#### Nested JSON Format (default)
+The default output (`output_biomes.json`) contains a nested structure with metadata at both root and biome levels:
+
+```json
+{
+  "metadata": {
+    "rows_per_biome": 4,
+    "columns_per_biome": 4,
+    "sprites_per_biome": 16,
+    "default_tiles_per_biome": 1,
+    "total_biomes": 2,
+    "total_tiles": 32
+  },
+  "data": {
+    "black_off": {
+      "metadata": {
+        "filename": "black_off_tileset.png",
+        "total_rows": 4,
+        "total_columns": 4,
+        "total_sprites": 16,
+        "default_tiles": 1
+      },
+      "tiles": {
+        "north": {
+          "none": {
+            "east": {
+              "none": {
+                "south": {
+                  "none": {
+                    "west": {
+                      "none": { "row": 0, "col": 0, "file": "black_off" },
+                      "white_on": { "row": 0, "col": 1, "file": "black_off" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Root Metadata:**
+- `rows_per_biome`: Number of rows in each biome's tileset grid
+- `columns_per_biome`: Number of columns in each biome's tileset grid  
+- `sprites_per_biome`: Total tiles per biome
+- `default_tiles_per_biome`: Tiles with no neighboring biomes (all neighbors same as center)
+- `total_biomes`: Number of biomes generated
+- `total_tiles`: Total tiles across all biomes
+
+**Per-Biome Metadata:**
+- `filename`: The corresponding PNG tileset filename
+- `total_rows`, `total_columns`: Grid dimensions for this biome
+- `total_sprites`: Total tiles for this biome
+- `default_tiles`: Tiles with no neighboring biomes
+
+**Tile Lookup:**
+Tiles are nested by neighbor direction: `north > east > south > west`. Each neighbor can be another biome name or `"none"` (same as center). Leaf nodes contain `row`, `col`, and `file` for sprite sheet lookup.
+
+#### Grid JSON Format (`--grid`)
+Grid mode generates one JSON file per biome (`<biome>_grid.json`) with a flat 2D array structure suitable for direct grid-based lookup.

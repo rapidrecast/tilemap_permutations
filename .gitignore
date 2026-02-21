@@ -26,4 +26,5 @@ target
 /target
 /*.json
 /*.png
+.nanocoder
 

@@ -218,17 +218,65 @@ fn main() {
             println!("Successfully wrote grid to {}", filename);
         }
     } else {
-        let mut json_root = serde_json::Value::Object(serde_json::Map::new());
-        for (_source, list) in &tiles_per_biome {
+        // Build the data portion (biomes) with metadata
+        let mut data_root = serde_json::Value::Object(serde_json::Map::new());
+        
+        for (source, list) in &tiles_per_biome {
+            let num_rows = (list.len() + row_col_dim - 1) / row_col_dim;
+            let num_cols = row_col_dim;
+            let total_sprites = list.len();
+            let default_tiles = list.iter().filter(|e| {
+                e.north.is_none() && e.east.is_none() && e.south.is_none() && e.west.is_none()
+            }).count();
+            
+            // Create biome entry with complete metadata upfront
+            data_root.as_object_mut().unwrap().insert(
+                source.as_str().to_string(),
+                serde_json::json!({
+                    "metadata": {
+                        "filename": format!("{}_tileset.png", source.as_str()),
+                        "total_rows": num_rows,
+                        "total_columns": num_cols,
+                        "total_sprites": total_sprites,
+                        "default_tiles": default_tiles
+                    },
+                    "tiles": {}
+                })
+            );
+            
+            // Build tile data for this biome
             for (i, entry) in list.iter().enumerate() {
                 let x = i % row_col_dim;
                 let y = i / row_col_dim;
-                update_json(&mut json_root, x, y, entry);
+                update_json(&mut data_root, x, y, entry);
             }
         }
 
+        // Build final output with metadata at root and biomes in data key
+        // Note: All biomes have the same dimensions due to combinatorics
+        let first_list = tiles_per_biome.values().next().unwrap();
+        let biome_count = tiles_per_biome.len();
+        let rows_per_biome = (first_list.len() + row_col_dim - 1) / row_col_dim;
+        let cols_per_biome = row_col_dim;
+        let sprites_per_biome = first_list.len();
+        let default_per_biome = first_list.iter().filter(|e| {
+            e.north.is_none() && e.east.is_none() && e.south.is_none() && e.west.is_none()
+        }).count();
+        
+        let output = serde_json::json!({
+            "metadata": {
+                "rows_per_biome": rows_per_biome,
+                "columns_per_biome": cols_per_biome,
+                "sprites_per_biome": sprites_per_biome,
+                "default_tiles_per_biome": default_per_biome,
+                "total_biomes": biome_count,
+                "total_tiles": sprites_per_biome * biome_count
+            },
+            "data": data_root
+        });
+
         let fw = File::create(&args.output).unwrap();
-        serde_json::to_writer_pretty(fw, &json_root).unwrap();
+        serde_json::to_writer_pretty(fw, &output).unwrap();
         println!("Successfully wrote nested JSON to {}", args.output);
     }
 
@@ -281,12 +329,19 @@ fn main() {
     }
 }
 
-fn update_json(json_root: &mut Value, x: usize, y: usize, entry: &BiomeEntry) {
-    json_root
+fn update_json(data_root: &mut Value, x: usize, y: usize, entry: &BiomeEntry) {
+    let biome_key = entry.here.as_str();
+    
+    // Navigate through the tiles structure (biome entry with metadata already created)
+    data_root
         .as_object_mut()
         .unwrap()
-        .entry(entry.here.as_str())
-        .or_insert(Value::Object(Map::new()))
+        .get_mut(biome_key)
+        .unwrap()
+        .as_object_mut()
+        .unwrap()
+        .get_mut("tiles")
+        .unwrap()
         .as_object_mut()
         .unwrap()
         .entry("north")
