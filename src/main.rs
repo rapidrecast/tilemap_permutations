@@ -30,6 +30,10 @@ struct Args {
     /// Skip generating tileset images.
     #[arg(long)]
     no_image: bool,
+
+    /// Number of base (blank) tiles to include at the beginning of each biome.
+    #[arg(short = 'v', long, default_value = "1")]
+    base_tiles: u32,
 }
 
 #[derive(Debug, Clone, PartialOrd, Ord, Eq, PartialEq, Hash)]
@@ -143,17 +147,31 @@ fn main() {
         }
     }
 
+    let mut tiles_per_biome: BTreeMap<Biome, Vec<BiomeEntry>> = BTreeMap::new();
+    for (source, set) in combos_per_biome {
+        let list: Vec<BiomeEntry> = set.into_iter().collect();
+        // Since None < Some, the blank tile (all neighbors None) will be the first.
+        let blank_tile = list[0].clone();
+        
+        let mut final_list = Vec::new();
+        for _ in 1..args.base_tiles {
+            final_list.push(blank_tile.clone());
+        }
+        final_list.extend(list);
+        tiles_per_biome.insert(source, final_list);
+    }
+
     let row_col_dim = biomes.len().pow(2);
 
     if args.grid {
         let other_biomes: Vec<String> = biomes.iter().map(|b| b.as_str().to_string()).collect();
 
-        for (source, set) in &combos_per_biome {
+        for (source, list) in &tiles_per_biome {
             let mut rows = Vec::new();
             let mut current_row_cells = Vec::new();
             let mut row_idx = 0;
 
-            for (i, entry) in set.iter().enumerate() {
+            for (i, entry) in list.iter().enumerate() {
                 let col_idx = i % row_col_dim;
                 let cell = serde_json::json!({
                     "col": col_idx,
@@ -174,13 +192,22 @@ fn main() {
                 }
             }
 
+            // Handle the last row if it's incomplete
+            if !current_row_cells.is_empty() {
+                rows.push(serde_json::json!({
+                    "row": row_idx,
+                    "tiles": current_row_cells
+                }));
+            }
+
+            let num_rows = (list.len() + row_col_dim - 1) / row_col_dim;
             let output_data = serde_json::json!({
                 "biome": source.as_str(),
-                "total_tiles": set.len(),
+                "total_tiles": list.len(),
                 "other_biomes": other_biomes,
                 "grid_shape": {
                     "width": row_col_dim,
-                    "height": row_col_dim
+                    "height": num_rows
                 },
                 "rows": rows
             });
@@ -192,8 +219,8 @@ fn main() {
         }
     } else {
         let mut json_root = serde_json::Value::Object(serde_json::Map::new());
-        for (_source, set) in &combos_per_biome {
-            for (i, entry) in set.iter().enumerate() {
+        for (_source, list) in &tiles_per_biome {
+            for (i, entry) in list.iter().enumerate() {
                 let x = i % row_col_dim;
                 let y = i / row_col_dim;
                 update_json(&mut json_root, x, y, entry);
@@ -206,15 +233,16 @@ fn main() {
     }
 
     if !args.no_image {
-        for (source, set) in &combos_per_biome {
+        for (source, list) in &tiles_per_biome {
+            let num_rows = (list.len() + row_col_dim - 1) / row_col_dim;
             let img_w = row_col_dim as u32 * tw;
-            let img_h = row_col_dim as u32 * th;
+            let img_h = num_rows as u32 * th;
             let mut img = RgbImage::new(img_w, img_h);
 
             let margin_w = (tw as f32 * 0.3) as u32;
             let margin_h = (th as f32 * 0.3) as u32;
 
-            for (i, entry) in set.iter().enumerate() {
+            for (i, entry) in list.iter().enumerate() {
                 let tx = (i % row_col_dim) as u32 * tw;
                 let ty = (i / row_col_dim) as u32 * th;
 
