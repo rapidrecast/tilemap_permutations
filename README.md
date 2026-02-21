@@ -1,22 +1,20 @@
 # Tilemap Permutations Generator
 
-A CLI tool designed to generate a comprehensive JSON mapping of all possible biome permutations for tile-based mapping systems. This is particularly useful for auto-tiling systems where you need to know which tile (indexed by row and column) corresponds to a specific combination of neighboring biomes.
+A CLI tool designed to generate a comprehensive JSON mapping and placeholder tilesets for all possible biome permutations in tile-based mapping systems.
 
 ## Features
 
-- **Nested Permutations**: Generates a self-documenting JSON structure following the path: `[biome of interest] -> north -> [north_biome] -> east -> [east_biome] -> south -> [south_biome] -> west -> [west_biome]`.
-- **Grid Output Mode**: Generates a separate file per biome with a structured row-by-row layout, including coordinate metadata and a summary of biomes and dimensions.
-- **Custom Biomes**: Provide any number of biome names to generate permutations for.
-- **Presets**: Quick flags for common biome sets (Black/White and Black/White/Grey).
-- **Coordinate Indexing**: Automatically assigns `row` and `col` indices for each unique combination, assuming a square grid layout for each source biome's tileset.
+- **Nested Permutations**: Generates a self-documenting JSON structure.
+- **Grid Output Mode**: Generates a separate file per biome with a structured 2D layout.
+- **Image Generation**: Automatically creates PNG tilesets for each biome with visual borders representing transitions.
+- **Custom Colors**: Support for HTML RGB hex codes via the biome list.
+- **Custom Tile Sizes**: Configure width and height for generated tiles.
 
 ## Installation
 
-To run this tool, you need the Rust toolchain installed on your system.
+To run this tool, you need the Rust toolchain installed.
 
 ### Install Rust (via rustup)
-
-If you don't have Rust installed, the recommended way is using `rustup`:
 
 1.  **On macOS or Linux**:
     ```bash
@@ -25,70 +23,47 @@ If you don't have Rust installed, the recommended way is using `rustup`:
 2.  **On Windows**:
     Download and run [rustup-init.exe](https://rustup.rs/).
 
-Follow the on-screen instructions. Once finished, restart your terminal and verify the installation:
-```bash
-rustc --version
-```
-
 ## How to Run
 
-Clone the repository and run using `cargo`:
-
-### Standard Nested Mode (Default)
-Generates a single `output_biomes.json` file.
+### Basic Run
+Generates `output_biomes.json` and PNG tilesets using default Black/White biomes.
 ```bash
 cargo run
 ```
 
-### Grid Mode
-Generates one file per biome (e.g., `black_off_grid.json`) with a structured 2D layout.
+### Custom Biomes with Colors
+Define biomes with optional hex colors using the `Name#RRGGBB` format.
 ```bash
-cargo run -- --grid # or -r
+cargo run -- --biomes Grass#228B22 Water#0000FF Sand#F4A460
 ```
 
-### Black, White, and Grey Preset
+### Custom Tile Size
+Set the tile dimensions (Width x Height).
 ```bash
-cargo run -- --grey # or -g
+cargo run -- --tile-size 40x50
 ```
 
-### Custom Biomes
+### Grid Mode and Grey Preset
 ```bash
-cargo run -- --biomes Forest Desert Tundra Water
+cargo run -- --grid --grey
 ```
 
-### Custom Output File (Nested Mode)
-```bash
-cargo run -- --biomes Ash Lava -o volcanic_map.json
-```
+## CLI Options
 
-## Using the Output
+- `-b, --biomes <BIOMES>...`: List of biomes (e.g., `Grass#228B22`).
+- `-g, --grey`: Use the Black, White, and Grey preset.
+- `-o, --output <OUTPUT>`: Output filename for nested JSON (default: `output_biomes.json`).
+- `-r, --grid`: Output per-biome grid JSON files.
+- `-s, --tile-size <TILE_SIZE>`: Dimensions in `WxH` format (default: `32x32`).
+- `--no-image`: Skip generating PNG tilesets.
 
-### Nested Mode (Default)
-The structure is deeply nested for easy traversal by neighbor state:
-`root.biome.north.biome.east.biome.south.biome.west.biome.property`
+## Output Details
 
-### Grid Mode (`--grid`)
-Generates files like `black_off_grid.json`. This mode provides a row-based layout with metadata:
+### Tileset Images (`*_tileset.png`)
+The tool generates a PNG for each biome. Each tile in the grid represents a unique permutation:
+- **Center (40%)**: The base color of the biome.
+- **Borders (30%)**: The color of the neighboring biome in that direction (North, East, South, West).
+- If a neighbor is the same as the base biome, the border remains the base color.
 
-```json
-{
-  "biome": "black_off",
-  "total_tiles": 16,
-  "other_biomes": ["black_off", "white_on"],
-  "grid_shape": { "width": 4, "height": 4 },
-  "rows": [
-    {
-      "row": 0,
-      "tiles": [
-        { "col": 0, "north": "none", "east": "none", "south": "none", "west": "none" },
-        { "col": 1, "north": "none", "east": "none", "south": "none", "west": "white_on" }
-      ]
-    }
-  ]
-}
-```
-
-- **`row` / `col`**: The logical coordinates within the tileset.
-- **`grid_shape`**: The width and height of the tileset grid.
-- **`none`**: Indicates that the neighbor in that direction is the same as the current biome.
-- **biome_name**: Indicates a transition to that specific biome.
+### JSON Formats
+The tool provides both a nested traversal format and a physical grid-based format (via `--grid`) to help your game logic or level editor identify the correct tile indices.

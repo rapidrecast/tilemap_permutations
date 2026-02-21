@@ -1,4 +1,5 @@
 use clap::Parser;
+use image::{Rgb, RgbImage};
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
@@ -6,11 +7,11 @@ use std::fs::File;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// List of biomes to include.
+    /// List of biomes to include. Format: Name or Name#RRGGBB.
     #[arg(short, long, num_args = 1..)]
     biomes: Option<Vec<String>>,
 
-    /// Use black, white, and grey preset.
+    /// Use black, white, and grey preset with default colors.
     #[arg(short, long)]
     grey: bool,
 
@@ -21,27 +22,70 @@ struct Args {
     /// Output per-biome grid files instead of a single nested JSON.
     #[arg(short = 'r', long)]
     grid: bool,
+
+    /// Tile size in px, format: WxH (e.g. 32x32, 40x50).
+    #[arg(short = 's', long, default_value = "32x32")]
+    tile_size: String,
+
+    /// Skip generating tileset images.
+    #[arg(long)]
+    no_image: bool,
 }
 
 #[derive(Debug, Clone, PartialOrd, Ord, Eq, PartialEq, Hash)]
 struct Biome {
+    name: String,
     display_name: String,
+    color: [u8; 3],
 }
 
 impl Biome {
-    fn new(name: &str) -> Self {
+    fn new(input: &str) -> Self {
+        let parts: Vec<&str> = input.split('#').collect();
+        let name = parts[0].to_string();
         let name_lower = name.to_lowercase();
+        
         let display_name = match name_lower.as_str() {
             "black" => "black_off".to_string(),
             "white" => "white_on".to_string(),
             "grey" => "grey_other".to_string(),
-            _ => name_lower,
+            _ => name_lower.clone(),
         };
-        Self { display_name }
+
+        let color = if parts.len() > 1 {
+            parse_hex_color(parts[1]).unwrap_or_else(|_| default_color(&name_lower))
+        } else {
+            default_color(&name_lower)
+        };
+
+        Self {
+            name,
+            display_name,
+            color,
+        }
     }
 
     fn as_str(&self) -> &str {
         &self.display_name
+    }
+}
+
+fn parse_hex_color(hex: &str) -> Result<[u8; 3], String> {
+    if hex.len() != 6 {
+        return Err("Hex color must be 6 characters".to_string());
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).map_err(|e| e.to_string())?;
+    let g = u8::from_str_radix(&hex[2..4], 16).map_err(|e| e.to_string())?;
+    let b = u8::from_str_radix(&hex[4..6], 16).map_err(|e| e.to_string())?;
+    Ok([r, g, b])
+}
+
+fn default_color(name: &str) -> [u8; 3] {
+    match name {
+        "black" => [0, 0, 0],
+        "white" => [255, 255, 255],
+        "grey" => [128, 128, 128],
+        _ => [255, 0, 255], // Magenta for unknown
     }
 }
 
@@ -54,10 +98,22 @@ struct BiomeEntry {
     pub west: Option<Biome>,
 }
 
+fn parse_tile_size(s: &str) -> (u32, u32) {
+    let parts: Vec<&str> = s.split('x').collect();
+    if parts.len() == 2 {
+        let w = parts[0].parse::<u32>().unwrap_or(32);
+        let h = parts[1].parse::<u32>().unwrap_or(32);
+        (w, h)
+    } else {
+        (32, 32)
+    }
+}
+
 fn main() {
     let args = Args::parse();
+    let (tw, th) = parse_tile_size(&args.tile_size);
 
-    let biome_names = if let Some(custom) = args.biomes {
+    let biome_inputs = if let Some(custom) = args.biomes {
         custom
     } else if args.grey {
         vec!["Black".to_string(), "White".to_string(), "Grey".to_string()]
@@ -65,7 +121,7 @@ fn main() {
         vec!["Black".to_string(), "White".to_string()]
     };
 
-    let biomes: Vec<Biome> = biome_names.iter().map(|s| Biome::new(s)).collect();
+    let biomes: Vec<Biome> = biome_inputs.iter().map(|s| Biome::new(s)).collect();
 
     let mut combos_per_biome: BTreeMap<Biome, BTreeSet<BiomeEntry>> = BTreeMap::new();
     for source in &biomes {
@@ -87,11 +143,12 @@ fn main() {
         }
     }
 
+    let row_col_dim = biomes.len().pow(2);
+
     if args.grid {
-        let row_col_dim = biomes.len().pow(2);
         let other_biomes: Vec<String> = biomes.iter().map(|b| b.as_str().to_string()).collect();
 
-        for (source, set) in combos_per_biome {
+        for (source, set) in &combos_per_biome {
             let mut rows = Vec::new();
             let mut current_row_cells = Vec::new();
             let mut row_idx = 0;
@@ -135,8 +192,7 @@ fn main() {
         }
     } else {
         let mut json_root = serde_json::Value::Object(serde_json::Map::new());
-        let row_col_dim = biomes.len().pow(2);
-        for (_source, set) in combos_per_biome {
+        for (_source, set) in &combos_per_biome {
             for (i, entry) in set.iter().enumerate() {
                 let x = i % row_col_dim;
                 let y = i / row_col_dim;
@@ -147,6 +203,53 @@ fn main() {
         let fw = File::create(&args.output).unwrap();
         serde_json::to_writer_pretty(fw, &json_root).unwrap();
         println!("Successfully wrote nested JSON to {}", args.output);
+    }
+
+    if !args.no_image {
+        for (source, set) in &combos_per_biome {
+            let img_w = row_col_dim as u32 * tw;
+            let img_h = row_col_dim as u32 * th;
+            let mut img = RgbImage::new(img_w, img_h);
+
+            let margin_w = (tw as f32 * 0.3) as u32;
+            let margin_h = (th as f32 * 0.3) as u32;
+
+            for (i, entry) in set.iter().enumerate() {
+                let tx = (i % row_col_dim) as u32 * tw;
+                let ty = (i / row_col_dim) as u32 * th;
+
+                let here_rgb = Rgb(entry.here.color);
+                let north_rgb = entry.north.as_ref().map(|b| Rgb(b.color)).unwrap_or(here_rgb);
+                let east_rgb = entry.east.as_ref().map(|b| Rgb(b.color)).unwrap_or(here_rgb);
+                let south_rgb = entry.south.as_ref().map(|b| Rgb(b.color)).unwrap_or(here_rgb);
+                let west_rgb = entry.west.as_ref().map(|b| Rgb(b.color)).unwrap_or(here_rgb);
+
+                for y in 0..th {
+                    for x in 0..tw {
+                        let px = tx + x;
+                        let py = ty + y;
+                        
+                        let color = if y < margin_h {
+                            north_rgb
+                        } else if y >= th - margin_h {
+                            south_rgb
+                        } else if x < margin_w {
+                            west_rgb
+                        } else if x >= tw - margin_w {
+                            east_rgb
+                        } else {
+                            here_rgb
+                        };
+                        
+                        img.put_pixel(px, py, color);
+                    }
+                }
+            }
+
+            let filename = format!("{}_tileset.png", source.as_str());
+            img.save(&filename).unwrap();
+            println!("Successfully generated tileset image: {}", filename);
+        }
     }
 }
 
