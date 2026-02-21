@@ -48,6 +48,19 @@ cargo run -- --tile-size 40x50
 cargo run -- --grid --grey
 ```
 
+## Workflow Example: Aseprite
+
+The generated tilesets are perfect for importing into pixel art tools like **Aseprite**. This allows you to use the generated borders as a guide for drawing actual transitions and textures.
+
+![Aseprite Import](example/Aseprite_import.png)
+
+Example command used to generate the above tileset:
+```bash
+cargo run -- -s 50x50 -b Grass#25562e Water#3c5e8b Ash#202e37
+```
+
+When importing into Aseprite, use the **Import Sprite Sheet** option and set the tile width and height to match your `--tile-size` parameter (e.g., 50x50).
+
 ## CLI Options
 
 - `-b, --biomes <BIOMES>...`: List of biomes (e.g., `Grass#228B22`).
