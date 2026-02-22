@@ -175,10 +175,10 @@ fn main() {
                 let col_idx = i % row_col_dim;
                 let cell = serde_json::json!({
                     "col": col_idx,
-                    "north": entry.north.as_ref().map(|b| b.as_str()).unwrap_or("none"),
-                    "east": entry.east.as_ref().map(|b| b.as_str()).unwrap_or("none"),
-                    "south": entry.south.as_ref().map(|b| b.as_str()).unwrap_or("none"),
-                    "west": entry.west.as_ref().map(|b| b.as_str()).unwrap_or("none"),
+                    "north": entry.north.as_ref().map(|b| b.as_str()).unwrap_or(entry.here.as_str()),
+                    "east": entry.east.as_ref().map(|b| b.as_str()).unwrap_or(entry.here.as_str()),
+                    "south": entry.south.as_ref().map(|b| b.as_str()).unwrap_or(entry.here.as_str()),
+                    "west": entry.west.as_ref().map(|b| b.as_str()).unwrap_or(entry.here.as_str()),
                 });
                 current_row_cells.push(cell);
 
@@ -348,7 +348,7 @@ fn update_json(data_root: &mut Value, x: usize, y: usize, entry: &BiomeEntry) {
         .or_insert(Value::Object(Map::new()))
         .as_object_mut()
         .unwrap()
-        .entry(entry.north.as_ref().map(|b| b.as_str()).unwrap_or("none"))
+        .entry(entry.north.as_ref().map(|b| b.as_str()).unwrap_or(entry.here.as_str()))
         .or_insert(Value::Object(Map::new()))
         .as_object_mut()
         .unwrap()
@@ -356,7 +356,7 @@ fn update_json(data_root: &mut Value, x: usize, y: usize, entry: &BiomeEntry) {
         .or_insert(Value::Object(Map::new()))
         .as_object_mut()
         .unwrap()
-        .entry(entry.east.as_ref().map(|b| b.as_str()).unwrap_or("none"))
+        .entry(entry.east.as_ref().map(|b| b.as_str()).unwrap_or(entry.here.as_str()))
         .or_insert(Value::Object(Map::new()))
         .as_object_mut()
         .unwrap()
@@ -364,7 +364,7 @@ fn update_json(data_root: &mut Value, x: usize, y: usize, entry: &BiomeEntry) {
         .or_insert(Value::Object(Map::new()))
         .as_object_mut()
         .unwrap()
-        .entry(entry.south.as_ref().map(|b| b.as_str()).unwrap_or("none"))
+        .entry(entry.south.as_ref().map(|b| b.as_str()).unwrap_or(entry.here.as_str()))
         .or_insert(Value::Object(Map::new()))
         .as_object_mut()
         .unwrap()
@@ -372,7 +372,7 @@ fn update_json(data_root: &mut Value, x: usize, y: usize, entry: &BiomeEntry) {
         .or_insert(Value::Object(Map::new()))
         .as_object_mut()
         .unwrap()
-        .entry(entry.west.as_ref().map(|b| b.as_str()).unwrap_or("none"))
+        .entry(entry.west.as_ref().map(|b| b.as_str()).unwrap_or(entry.here.as_str()))
         .or_insert(serde_json::json!({
             "row": y,
             "col": x,
